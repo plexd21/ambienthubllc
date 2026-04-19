@@ -13,6 +13,7 @@ local Settings = {
     ESPEnabled = false,
     NamesEnabled = false,
     DistanceEnabled = false,
+    TracerEnabled = false,
     FillColor = Color3.fromRGB(255, 0, 0),
     OutlineColor = Color3.fromRGB(255, 255, 255),
     FillTransparency = 0.5,
@@ -21,13 +22,24 @@ local Settings = {
     TeleportTarget = nil,
     TeleportLoopEnabled = false,
     TeleportDelay = 2,
+    KeybindHintsEnabled = false,
 }
 
 local nameBillboards     = {}
 local distanceBillboards = {}
+local tracerLines        = {}
 local UIToggles          = {}
 local teleportThread     = nil
 local playerDropdown     = nil
+
+-- Keybind registry — updated live when player reassigns
+local KeybindRegistry = {
+    { flag = "KeyESP",           action = "Toggle Highlights",    key = "F1" },
+    { flag = "KeyNames",         action = "Toggle Names",         key = "F2" },
+    { flag = "KeyDistance",      action = "Toggle Distance",      key = "F3" },
+    { flag = "KeyTeleportOnce",  action = "Teleport Once",        key = "F4" },
+    { flag = "KeyTeleportLoop",  action = "Toggle Teleport Loop", key = "F5" },
+}
 
 -- =====================
 -- TELEPORT
@@ -36,9 +48,7 @@ local playerDropdown     = nil
 local function getPlayerNames()
     local names = {}
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            table.insert(names, p.Name)
-        end
+        if p ~= LocalPlayer then table.insert(names, p.Name) end
     end
     return names
 end
@@ -49,16 +59,13 @@ local function teleportToTarget()
         Rayfield:Notify({ Title = "Rage", Content = "No player selected.", Duration = 2 })
         return
     end
-
     local targetPlayer = Players:FindFirstChild(target)
     if not targetPlayer then
         Rayfield:Notify({ Title = "Rage", Content = target .. " is not in the game.", Duration = 2 })
         return
     end
-
     local targetHRP = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
     local localHRP  = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-
     if targetHRP and localHRP then
         localHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
         Rayfield:Notify({ Title = "Rage", Content = "Teleported to " .. target, Duration = 1.5 })
@@ -68,11 +75,7 @@ local function teleportToTarget()
 end
 
 local function startTeleportLoop()
-    if teleportThread then
-        task.cancel(teleportThread)
-        teleportThread = nil
-    end
-
+    if teleportThread then task.cancel(teleportThread) teleportThread = nil end
     teleportThread = task.spawn(function()
         while Settings.TeleportLoopEnabled do
             teleportToTarget()
@@ -83,37 +86,23 @@ end
 
 local function stopTeleportLoop()
     Settings.TeleportLoopEnabled = false
-    if teleportThread then
-        task.cancel(teleportThread)
-        teleportThread = nil
-    end
+    if teleportThread then task.cancel(teleportThread) teleportThread = nil end
 end
 
--- Keep dropdown options fresh as players join/leave
 local function refreshPlayerDropdown()
     if not playerDropdown then return end
-    local names = getPlayerNames()
-    -- Rayfield dropdowns can be refreshed by calling :Refresh() if available,
-    -- otherwise we update the options table directly
-    pcall(function()
-        playerDropdown:Refresh(names, true)
-    end)
+    pcall(function() playerDropdown:Refresh(getPlayerNames(), true) end)
 end
 
 Players.PlayerAdded:Connect(function(p)
-    if p ~= LocalPlayer then
-        task.wait(1)
-        refreshPlayerDropdown()
-    end
+    if p ~= LocalPlayer then task.wait(1) refreshPlayerDropdown() end
 end)
 
 Players.PlayerRemoving:Connect(function(p)
     if Settings.TeleportTarget == p.Name then
         Settings.TeleportTarget = nil
         stopTeleportLoop()
-        if UIToggles["TeleportLoopToggle"] then
-            UIToggles["TeleportLoopToggle"]:Set(false)
-        end
+        if UIToggles["TeleportLoopToggle"] then UIToggles["TeleportLoopToggle"]:Set(false) end
         Rayfield:Notify({ Title = "Rage", Content = p.Name .. " left the game.", Duration = 2 })
     end
     task.wait(0.1)
@@ -221,6 +210,35 @@ local function removeDistanceBillboard(player)
 end
 
 -- =====================
+-- TRACER LINES
+-- =====================
+
+local function addTracer(player)
+    if not Settings.TracerEnabled then return end
+    if tracerLines[player] then tracerLines[player]:Remove() end
+    local line = Drawing.new("Line")
+    line.Visible      = false
+    line.Color        = Color3.fromRGB(255, 50, 50)
+    line.Thickness    = 1
+    line.Transparency = 1
+    tracerLines[player] = line
+end
+
+local function removeTracer(player)
+    if tracerLines[player] then
+        tracerLines[player]:Remove()
+        tracerLines[player] = nil
+    end
+end
+
+local function removeAllTracers()
+    for player, line in pairs(tracerLines) do
+        if line then line:Remove() end
+        tracerLines[player] = nil
+    end
+end
+
+-- =====================
 -- CLEANUP / REFRESH
 -- =====================
 
@@ -228,6 +246,7 @@ local function cleanupPlayer(player)
     if player.Character then removeHighlight(player.Character) end
     removeNameBillboard(player)
     removeDistanceBillboard(player)
+    removeTracer(player)
 end
 
 local function refreshCharacter(player, character)
@@ -235,17 +254,17 @@ local function refreshCharacter(player, character)
     removeHighlight(character)
     removeNameBillboard(player)
     removeDistanceBillboard(player)
+    removeTracer(player)
     addHighlight(character)
     addNameBillboard(player, character)
     addDistanceBillboard(player, character)
+    addTracer(player)
 end
 
 local function refreshAll()
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
-        if player.Character then
-            refreshCharacter(player, player.Character)
-        end
+        if player.Character then refreshCharacter(player, player.Character) end
     end
 end
 
@@ -259,9 +278,7 @@ local function onPlayerAdded(player)
         task.wait(1)
         refreshCharacter(player, char)
     end)
-    if player.Character then
-        refreshCharacter(player, player.Character)
-    end
+    if player.Character then refreshCharacter(player, player.Character) end
 end
 
 for _, p in ipairs(Players:GetPlayers()) do onPlayerAdded(p) end
@@ -280,16 +297,48 @@ task.spawn(function()
 end)
 
 RunService.RenderStepped:Connect(function()
-    if not Settings.DistanceEnabled then return end
     local localChar = LocalPlayer.Character
     local localHRP  = localChar and localChar:FindFirstChild("HumanoidRootPart")
+    local camera    = workspace.CurrentCamera
+
+    -- Tracer lines
+    if Settings.TracerEnabled and localHRP and camera then
+        local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+        for player, line in pairs(tracerLines) do
+            if not line then tracerLines[player] = nil continue end
+            local char = player.Character
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (localHRP.Position - hrp.Position).Magnitude
+                if dist <= Settings.MaxDistance then
+                    local screenPos, onScreen = camera:WorldToViewportPoint(hrp.Position)
+                    if onScreen then
+                        line.From        = screenCenter
+                        line.To          = Vector2.new(screenPos.X, screenPos.Y)
+                        line.Visible     = true
+                        line.Transparency = 1
+                    else
+                        line.Visible = false
+                    end
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
+        end
+    else
+        for _, line in pairs(tracerLines) do
+            if line then line.Visible = false end
+        end
+    end
+
+    -- Distance labels
+    if not Settings.DistanceEnabled then return end
     if not localHRP then return end
 
     for player, bg in pairs(distanceBillboards) do
-        if not bg or not bg.Parent then
-            distanceBillboards[player] = nil
-            continue
-        end
+        if not bg or not bg.Parent then distanceBillboards[player] = nil continue end
         local char = player.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then continue end
@@ -306,6 +355,87 @@ RunService.RenderStepped:Connect(function()
 
         local nameBg = nameBillboards[player]
         if nameBg then nameBg.Enabled = Settings.NamesEnabled and not beyondRange end
+    end
+end)
+
+-- =====================
+-- KEYBIND HINT UI
+-- =====================
+
+local keybindHintGui = Instance.new("ScreenGui")
+keybindHintGui.Name            = "KeybindHints"
+keybindHintGui.ResetOnSpawn    = false
+keybindHintGui.Enabled         = false
+keybindHintGui.Parent          = LocalPlayer:WaitForChild("PlayerGui")
+
+local hintFrame = Instance.new("Frame")
+hintFrame.Size                   = UDim2.new(0, 240, 0, #KeybindRegistry * 28 + 36)
+hintFrame.Position               = UDim2.new(1, -250, 0.5, -((#KeybindRegistry * 28 + 36) / 2))
+hintFrame.BackgroundColor3       = Color3.fromRGB(15, 15, 15)
+hintFrame.BackgroundTransparency = 0.25
+hintFrame.BorderSizePixel        = 0
+hintFrame.Parent                 = keybindHintGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent       = hintFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size                   = UDim2.new(1, 0, 0, 28)
+titleLabel.Position               = UDim2.new(0, 0, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text                   = "⌨  Keybinds"
+titleLabel.TextColor3             = Color3.fromRGB(255, 200, 50)
+titleLabel.TextSize               = 13
+titleLabel.Font                   = Enum.Font.GothamBold
+titleLabel.Parent                 = hintFrame
+
+-- Row labels stored so we can refresh their text
+local hintRows = {}
+for i, hint in ipairs(KeybindRegistry) do
+    local row = Instance.new("TextLabel")
+    row.Size                   = UDim2.new(1, -16, 0, 22)
+    row.Position               = UDim2.new(0, 8, 0, 24 + (i - 1) * 26)
+    row.BackgroundTransparency = 1
+    row.TextColor3             = Color3.fromRGB(210, 210, 210)
+    row.TextSize               = 12
+    row.Font                   = Enum.Font.Gotham
+    row.TextXAlignment         = Enum.TextXAlignment.Left
+    row.Text                   = "[" .. hint.key .. "]  " .. hint.action
+    row.Parent                 = hintFrame
+    hintRows[i] = row
+end
+
+-- Reads current keybind values from Rayfield's shared flags table and rebuilds rows
+local function refreshHintRows()
+    for i, hint in ipairs(KeybindRegistry) do
+        local currentKey = hint.key
+        -- Rayfield stores keybind values in RayfieldLibrary.Flags
+        pcall(function()
+            local flagVal = Rayfield.Flags[hint.flag]
+            if flagVal and flagVal ~= "" then
+                currentKey = tostring(flagVal)
+            end
+        end)
+        if hintRows[i] then
+            hintRows[i].Text = "[" .. currentKey .. "]  " .. hint.action
+        end
+    end
+end
+
+local function setKeybindHints(enabled)
+    Settings.KeybindHintsEnabled = enabled
+    keybindHintGui.Enabled       = enabled
+    if enabled then refreshHintRows() end
+end
+
+-- Auto-refresh every 60 seconds so reassigned keys stay accurate
+task.spawn(function()
+    while true do
+        task.wait(60)
+        if Settings.KeybindHintsEnabled then
+            refreshHintRows()
+        end
     end
 end)
 
@@ -449,6 +579,24 @@ VisualsTab:CreateSlider({
     end,
 })
 
+local TracerToggle = VisualsTab:CreateToggle({
+    Name         = "Show Tracer Lines",
+    CurrentValue = false,
+    Flag         = "TracerToggle",
+    Callback     = function(v)
+        Settings.TracerEnabled = v
+        if v then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer then addTracer(p) end
+            end
+        else
+            removeAllTracers()
+        end
+    end,
+})
+UIToggles["TracerToggle"] = TracerToggle
+
+VisualsTab:CreateLabel("Tracer lines draw from screen bottom-center to each player.")
 VisualsTab:CreateLabel("Players beyond max distance are hidden from all ESP.")
 
 -- ── Rage Tab ──────────────────────────────────────────
@@ -470,9 +618,7 @@ playerDropdown = RageTab:CreateDropdown({
 
 RageTab:CreateButton({
     Name     = "Teleport Once",
-    Callback = function()
-        teleportToTarget()
-    end,
+    Callback = function() teleportToTarget() end,
 })
 
 local TeleportLoopToggle = RageTab:CreateToggle({
@@ -503,15 +649,26 @@ RageTab:CreateSlider({
     Suffix       = "s",
     CurrentValue = 2,
     Flag         = "TeleportDelay",
-    Callback     = function(v)
-        Settings.TeleportDelay = v
-    end,
+    Callback     = function(v) Settings.TeleportDelay = v end,
 })
 
 RageTab:CreateLabel("Select a player from the dropdown, then teleport once or enable loop.")
 
 -- ── Keybinds Tab ──────────────────────────────────────
 local KeybindsTab = Window:CreateTab("Keybinds", 4483362458)
+
+KeybindsTab:CreateSection("Keybind Hints")
+
+KeybindsTab:CreateToggle({
+    Name         = "Show Keybind Popup",
+    CurrentValue = false,
+    Flag         = "KeybindHintsToggle",
+    Callback     = function(v)
+        setKeybindHints(v)
+    end,
+})
+
+KeybindsTab:CreateLabel("Popup shows all keybinds. Auto-refreshes every 60 seconds.")
 
 KeybindsTab:CreateSection("Visuals Keybinds")
 
@@ -585,9 +742,7 @@ KeybindsTab:CreateKeybind({
     CurrentKeybind = "F4",
     HoldToInteract = false,
     Flag           = "KeyTeleportOnce",
-    Callback       = function()
-        teleportToTarget()
-    end,
+    Callback       = function() teleportToTarget() end,
 })
 
 KeybindsTab:CreateKeybind({
@@ -602,11 +757,7 @@ KeybindsTab:CreateKeybind({
         end
         Settings.TeleportLoopEnabled = not Settings.TeleportLoopEnabled
         if UIToggles["TeleportLoopToggle"] then UIToggles["TeleportLoopToggle"]:Set(Settings.TeleportLoopEnabled) end
-        if Settings.TeleportLoopEnabled then
-            startTeleportLoop()
-        else
-            stopTeleportLoop()
-        end
+        if Settings.TeleportLoopEnabled then startTeleportLoop() else stopTeleportLoop() end
         Rayfield:Notify({
             Title    = "Rage",
             Content  = "Teleport Loop " .. (Settings.TeleportLoopEnabled and "Enabled" or "Disabled"),
