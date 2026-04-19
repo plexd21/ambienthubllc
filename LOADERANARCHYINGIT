@@ -19,49 +19,72 @@ local Settings = {
     FillTransparency = 0.5,
     MaxDistance = 10000,
     NameSize = 14,
-    HitboxScale = 1,
-    HitboxColor = Color3.fromRGB(0, 255, 0),
     HitboxTargetPart = "Head",
-}
-
-local PART_NAMES = {
-    Head            = {"Head"},
-    Torso           = {"Torso", "UpperTorso", "LowerTorso"},
-    LeftArm         = {"Left Arm", "LeftUpperArm", "LeftLowerArm", "LeftHand"},
-    RightArm        = {"Right Arm", "RightUpperArm", "RightLowerArm", "RightHand"},
-    LeftLeg         = {"Left Leg", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot"},
-    RightLeg        = {"Right Leg", "RightUpperLeg", "RightLowerLeg", "RightFoot"},
-    HeadBack        = {"HeadBack"},
-    HeadEars        = {"HeadEars"},
-    HeadEyes        = {"HeadEyes"},
-    HeadJaws        = {"HeadJaws"},
-    HeadNape        = {"HeadNape"},
-    HeadNeck        = {"HeadNeck"},
-    HeadTop         = {"HeadTop"},
-    TorsoUpperBack  = {"TorsoUpperBack"},
-    TorsoUpperFront = {"TorsoUpperFront"},
-    TorsoLowerBack  = {"TorsoLowerBack"},
-    TorsoLowerFront = {"TorsoLowerFront"},
-    TorsoLowerLeft  = {"TorsoLowerLeft"},
-    TorsoLowerRight = {"TorsoLowerRight"},
-    TorsoPelvis     = {"TorsoPelvis"},
-    RightArmLower   = {"RightArmLower"},
-    RightLegLower   = {"RightLegLower"},
-    RightLegMid     = {"RightLegMid"},
+    HitboxSize = 10,
 }
 
 local DROPDOWN_OPTIONS = {
-    "Head", "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg",
-    "HeadBack", "HeadEars", "HeadEyes", "HeadJaws", "HeadNape", "HeadNeck", "HeadTop",
-    "TorsoUpperBack", "TorsoUpperFront", "TorsoLowerBack", "TorsoLowerFront",
-    "TorsoLowerLeft", "TorsoLowerRight", "TorsoPelvis",
-    "RightArmLower", "RightLegLower", "RightLegMid",
+    "Head",
+    "Base",
+    "HeadEars",
+    "HeadEyes",
+    "HeadJaws",
+    "HeadNeck",
+    "HeadTop",
+    "HeadBack",
+    "HeadNape",
+    "LeftArm",
+    "LeftArmLower",
+    "LeftArmUpper",
+    "LeftLeg",
+    "LeftLegLower",
+    "RightArm",
+    "RightArmLower",
+    "RightLegLower",
+    "RightLegMid",
+    "TorsoLowerBack",
+    "TorsoLowerFront",
+    "TorsoLowerLeft",
+    "TorsoLowerRight",
+    "TorsoPelvis",
+    "TorsoUpperBack",
+    "TorsoUpperFront",
 }
 
 local nameBillboards     = {}
 local distanceBillboards = {}
-local hitboxData         = {}
 local UIToggles          = {}
+
+-- =====================
+-- HITBOX (_G METHOD)
+-- =====================
+
+_G.HitboxSize    = Settings.HitboxSize
+_G.HitboxEnabled = false
+_G.HitboxPart    = Settings.HitboxTargetPart
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if not _G.HitboxEnabled then continue end
+        for _, v in ipairs(Players:GetPlayers()) do
+            if v == LocalPlayer then continue end
+            pcall(function()
+                local char = v.Character
+                if not char then return end
+
+                -- Find the target part recursively
+                local part = char:FindFirstChild(_G.HitboxPart, true)
+                if not part or not part:IsA("BasePart") then return end
+
+                part.Size         = Vector3.new(_G.HitboxSize, _G.HitboxSize, _G.HitboxSize)
+                part.Transparency = 0.5
+                part.BrickColor   = BrickColor.new("Bright red")
+                part.CanCollide   = false
+            end)
+        end
+    end
+end)
 
 -- =====================
 -- HIGHLIGHT
@@ -82,109 +105,6 @@ end
 local function removeHighlight(character)
     local h = character:FindFirstChild("PlayerHighlight")
     if h then h:Destroy() end
-end
-
--- =====================
--- HITBOX EXPANDER
--- =====================
-
-local function findPartInCharacter(character, groupName)
-    local partList = PART_NAMES[groupName]
-    if not partList then
-        warn("[HitboxExpander] No part list for group:", groupName)
-        return nil
-    end
-
-    -- Pass 1: direct child
-    for _, partName in ipairs(partList) do
-        local p = character:FindFirstChild(partName)
-        if p and p:IsA("BasePart") then return p end
-    end
-
-    -- Pass 2: recursive FindFirstChild
-    for _, partName in ipairs(partList) do
-        local p = character:FindFirstChild(partName, true)
-        if p and p:IsA("BasePart") then return p end
-    end
-
-    -- Pass 3: full descendant scan
-    for _, desc in ipairs(character:GetDescendants()) do
-        if desc:IsA("BasePart") then
-            for _, partName in ipairs(partList) do
-                if desc.Name == partName then return desc end
-            end
-        end
-    end
-
-    warn("[HitboxExpander] Could not find part for group:", groupName, "in", character.Name)
-    return nil
-end
-
-local function addHitbox(player, character)
-    if not Settings.HitboxEnabled then return end
-    if not character then return end
-
-    if hitboxData[player] then
-        if hitboxData[player].box  and hitboxData[player].box.Parent  then hitboxData[player].box:Destroy()  end
-        if hitboxData[player].part and hitboxData[player].part.Parent then hitboxData[player].part:Destroy() end
-        hitboxData[player] = nil
-    end
-
-    local realPart = findPartInCharacter(character, Settings.HitboxTargetPart)
-    if not realPart then
-        warn("[HitboxExpander] Skipping hitbox for", player.Name, "- part not found:", Settings.HitboxTargetPart)
-        return
-    end
-
-    local ok, err = pcall(function()
-        local fakePart = Instance.new("Part")
-        fakePart.Name         = "ESPHitboxPart"
-        fakePart.Anchored     = false
-        fakePart.CanCollide   = false
-        fakePart.Transparency = 1
-        fakePart.Size         = realPart.Size * Settings.HitboxScale
-        fakePart.CFrame       = realPart.CFrame
-        fakePart.Parent       = character
-
-        local weld = Instance.new("WeldConstraint")
-        weld.Part0  = realPart
-        weld.Part1  = fakePart
-        weld.Parent = fakePart
-
-        local box = Instance.new("SelectionBox")
-        box.Name                = "ESPHitbox"
-        box.Adornee             = fakePart
-        box.Color3              = Settings.HitboxColor
-        box.LineThickness       = 0.05
-        box.SurfaceTransparency = 0.7
-        box.SurfaceColor3       = Settings.HitboxColor
-        box.Parent              = character
-
-        hitboxData[player] = { box = box, part = fakePart }
-    end)
-
-    if not ok then
-        warn("[HitboxExpander] Error creating hitbox for", player.Name, ":", err)
-    end
-end
-
-local function removeHitbox(player)
-    if not hitboxData[player] then return end
-    if hitboxData[player].box  and hitboxData[player].box.Parent  then hitboxData[player].box:Destroy()  end
-    if hitboxData[player].part and hitboxData[player].part.Parent then hitboxData[player].part:Destroy() end
-    hitboxData[player] = nil
-end
-
-local function refreshHitboxes()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        if player.Character then
-            removeHitbox(player)
-            if Settings.HitboxEnabled then
-                addHitbox(player, player.Character)
-            end
-        end
-    end
 end
 
 -- =====================
@@ -272,7 +192,6 @@ end
 
 local function cleanupPlayer(player)
     if player.Character then removeHighlight(player.Character) end
-    removeHitbox(player)
     removeNameBillboard(player)
     removeDistanceBillboard(player)
 end
@@ -280,11 +199,9 @@ end
 local function refreshCharacter(player, character)
     if not character then return end
     removeHighlight(character)
-    removeHitbox(player)
     removeNameBillboard(player)
     removeDistanceBillboard(player)
     addHighlight(character)
-    addHitbox(player, character)
     addNameBillboard(player, character)
     addDistanceBillboard(player, character)
 end
@@ -353,10 +270,6 @@ RunService.RenderStepped:Connect(function()
 
         local highlight = char:FindFirstChild("PlayerHighlight")
         if highlight then highlight.Enabled = Settings.ESPEnabled and not beyondRange end
-
-        if hitboxData[player] and hitboxData[player].box then
-            hitboxData[player].box.Visible = Settings.HitboxEnabled and not beyondRange
-        end
 
         local nameBg = nameBillboards[player]
         if nameBg then nameBg.Enabled = Settings.NamesEnabled and not beyondRange end
@@ -515,65 +428,40 @@ local HitboxToggle = CombatTab:CreateToggle({
     CurrentValue = false,
     Flag         = "HitboxToggle",
     Callback     = function(v)
-        Settings.HitboxEnabled = v
-        if v then
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character then addHitbox(p, p.Character) end
-            end
-        else
-            for _, p in ipairs(Players:GetPlayers()) do removeHitbox(p) end
-        end
+        _G.HitboxEnabled = v
     end,
 })
 UIToggles["HitboxToggle"] = HitboxToggle
 
 CombatTab:CreateSlider({
-    Name         = "Hitbox Size Multiplier",
+    Name         = "Hitbox Size",
     Range        = {1, 100},
     Increment    = 1,
     Suffix       = "x",
-    CurrentValue = 1,
-    Flag         = "HitboxScale",
+    CurrentValue = 10,
+    Flag         = "HitboxSize",
     Callback     = function(v)
-        Settings.HitboxScale = v
-        refreshHitboxes()
-    end,
-})
-
-CombatTab:CreateColorPicker({
-    Name     = "Hitbox Color",
-    Color    = Color3.fromRGB(0, 255, 0),
-    Flag     = "HitboxColor",
-    Callback = function(v)
-        Settings.HitboxColor = v
-        for _, data in pairs(hitboxData) do
-            if data and data.box then
-                data.box.Color3        = v
-                data.box.SurfaceColor3 = v
-            end
-        end
+        _G.HitboxSize = v
     end,
 })
 
 CombatTab:CreateSection("Target Part")
 
 CombatTab:CreateDropdown({
-    Name            = "Bullet Target Part",
+    Name            = "Target Part",
     Options         = DROPDOWN_OPTIONS,
     CurrentOption   = {"Head"},
     MultipleOptions = false,
     Flag            = "HitboxTargetPart",
     Callback        = function(selected)
         local choice = type(selected) == "table" and selected[1] or selected
-        if choice and PART_NAMES[choice] then
-            Settings.HitboxTargetPart = choice
-            refreshHitboxes()
+        if choice then
+            _G.HitboxPart = choice
         end
     end,
 })
 
-CombatTab:CreateLabel("Selects which body part the hitbox expands on.")
-CombatTab:CreateLabel("Parts are searched recursively through the entire character.")
+CombatTab:CreateLabel("Expands the selected part on all enemy characters.")
 
 -- ── Keybinds Tab ──────────────────────────────────────
 local KeybindsTab = Window:CreateTab("Keybinds", 4483362458)
@@ -651,18 +539,11 @@ KeybindsTab:CreateKeybind({
     HoldToInteract = false,
     Flag           = "KeyHitbox",
     Callback       = function()
-        Settings.HitboxEnabled = not Settings.HitboxEnabled
-        if UIToggles["HitboxToggle"] then UIToggles["HitboxToggle"]:Set(Settings.HitboxEnabled) end
-        if Settings.HitboxEnabled then
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character then addHitbox(p, p.Character) end
-            end
-        else
-            for _, p in ipairs(Players:GetPlayers()) do removeHitbox(p) end
-        end
+        _G.HitboxEnabled = not _G.HitboxEnabled
+        if UIToggles["HitboxToggle"] then UIToggles["HitboxToggle"]:Set(_G.HitboxEnabled) end
         Rayfield:Notify({
             Title    = "Anarchying It V.1",
-            Content  = "Hitbox " .. (Settings.HitboxEnabled and "Enabled" or "Disabled"),
+            Content  = "Hitbox " .. (_G.HitboxEnabled and "Enabled" or "Disabled"),
             Duration = 1.5,
         })
     end,
