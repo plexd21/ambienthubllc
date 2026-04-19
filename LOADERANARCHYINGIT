@@ -4,6 +4,8 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
 
 -- Load Rayfield
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -13,42 +15,16 @@ local Settings = {
     ESPEnabled = false,
     NamesEnabled = false,
     DistanceEnabled = false,
-    HitboxEnabled = false,
     FillColor = Color3.fromRGB(255, 0, 0),
     OutlineColor = Color3.fromRGB(255, 255, 255),
     FillTransparency = 0.5,
     MaxDistance = 10000,
     NameSize = 14,
-    HitboxTargetPart = "Head",
-    HitboxSize = 10,
-}
-
-local DROPDOWN_OPTIONS = {
-    "Head",
-    "Base",
-    "HeadEars",
-    "HeadEyes",
-    "HeadJaws",
-    "HeadNeck",
-    "HeadTop",
-    "HeadBack",
-    "HeadNape",
-    "LeftArm",
-    "LeftArmLower",
-    "LeftArmUpper",
-    "LeftLeg",
-    "LeftLegLower",
-    "RightArm",
-    "RightArmLower",
-    "RightLegLower",
-    "RightLegMid",
-    "TorsoLowerBack",
-    "TorsoLowerFront",
-    "TorsoLowerLeft",
-    "TorsoLowerRight",
-    "TorsoPelvis",
-    "TorsoUpperBack",
-    "TorsoUpperFront",
+    TextureEnabled = false,
+    BulletSoundEnabled = false,
+    BulletSoundId = "832380497",
+    TeleportLoopEnabled = false,
+    TeleportDelay = 2,
 }
 
 local nameBillboards     = {}
@@ -56,35 +32,149 @@ local distanceBillboards = {}
 local UIToggles          = {}
 
 -- =====================
--- HITBOX (_G METHOD)
+-- TEXTURE
 -- =====================
 
-_G.HitboxSize    = Settings.HitboxSize
-_G.HitboxEnabled = false
-_G.HitboxPart    = Settings.HitboxTargetPart
+local TEXTURE_ID = "rbxassetid://5226483487"
+local appliedTextures = {}
 
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if not _G.HitboxEnabled then continue end
-        for _, v in ipairs(Players:GetPlayers()) do
-            if v == LocalPlayer then continue end
-            pcall(function()
-                local char = v.Character
-                if not char then return end
-
-                -- Find the target part recursively
-                local part = char:FindFirstChild(_G.HitboxPart, true)
-                if not part or not part:IsA("BasePart") then return end
-
-                part.Size         = Vector3.new(_G.HitboxSize, _G.HitboxSize, _G.HitboxSize)
-                part.Transparency = 0.5
-                part.BrickColor   = BrickColor.new("Bright red")
-                part.CanCollide   = false
-            end)
+local function applyTexture()
+    local character = LocalPlayer.Character
+    if not character then return end
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            -- Remove existing decals/textures we added
+            for _, d in ipairs(part:GetChildren()) do
+                if d:IsA("Decal") and d.Name == "ESPTexture" then d:Destroy() end
+            end
+            for _, face in ipairs({
+                Enum.NormalId.Front, Enum.NormalId.Back,
+                Enum.NormalId.Left,  Enum.NormalId.Right,
+                Enum.NormalId.Top,   Enum.NormalId.Bottom,
+            }) do
+                local decal = Instance.new("Decal")
+                decal.Name     = "ESPTexture"
+                decal.Texture  = TEXTURE_ID
+                decal.Face     = face
+                decal.Parent   = part
+                table.insert(appliedTextures, decal)
+            end
         end
     end
-end)
+    -- Also apply to Shirt/Pants by removing them and using decals
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        for _, obj in ipairs(character:GetChildren()) do
+            if obj:IsA("Shirt") or obj:IsA("Pants") then
+                obj.Parent = nil
+                table.insert(appliedTextures, obj) -- store for restoration
+            end
+        end
+    end
+end
+
+local function removeTexture()
+    for _, d in ipairs(appliedTextures) do
+        if d and d.Parent then
+            d:Destroy()
+        elseif d and (d:IsA("Shirt") or d:IsA("Pants")) then
+            d.Parent = LocalPlayer.Character
+        end
+    end
+    appliedTextures = {}
+end
+
+-- =====================
+-- BULLET SOUND
+-- =====================
+
+local bulletSound = nil
+local bulletConnection = nil
+
+local function setupBulletSound()
+    if bulletSound then bulletSound:Destroy() end
+    bulletSound = Instance.new("Sound")
+    bulletSound.Name     = "BulletHitSound"
+    bulletSound.SoundId  = "rbxassetid://" .. Settings.BulletSoundId
+    bulletSound.Volume   = 1
+    bulletSound.RollOffMaxDistance = 999999
+    bulletSound.Parent   = SoundService
+end
+
+local function enableBulletSound()
+    setupBulletSound()
+    -- Listen for the local character taking damage as a proxy for being shot
+    local character = LocalPlayer.Character
+    if not character then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+
+    if bulletConnection then bulletConnection:Disconnect() end
+    bulletConnection = humanoid.HealthChanged:Connect(function(newHealth)
+        if not Settings.BulletSoundEnabled then return end
+        if newHealth < humanoid.MaxHealth then
+            if bulletSound and not bulletSound.IsPlaying then
+                bulletSound:Play()
+            end
+        end
+    end)
+end
+
+local function disableBulletSound()
+    if bulletConnection then
+        bulletConnection:Disconnect()
+        bulletConnection = nil
+    end
+    if bulletSound then
+        bulletSound:Stop()
+    end
+end
+
+-- =====================
+-- TELEPORT LOOP
+-- =====================
+
+local teleportThread = nil
+
+local function startTeleportLoop()
+    if teleportThread then
+        task.cancel(teleportThread)
+        teleportThread = nil
+    end
+
+    teleportThread = task.spawn(function()
+        while Settings.TeleportLoopEnabled do
+            for _, player in ipairs(Players:GetPlayers()) do
+                if not Settings.TeleportLoopEnabled then break end
+                if player == LocalPlayer then continue end
+
+                local targetChar = player.Character
+                local targetHRP  = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                local localChar  = LocalPlayer.Character
+                local localHRP   = localChar and localChar:FindFirstChild("HumanoidRootPart")
+
+                if targetHRP and localHRP then
+                    localHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+                    Rayfield:Notify({
+                        Title    = "Rage",
+                        Content  = "Teleported to " .. player.Name,
+                        Duration = 1,
+                    })
+                end
+
+                task.wait(Settings.TeleportDelay)
+            end
+        end
+    end)
+end
+
+local function stopTeleportLoop()
+    Settings.TeleportLoopEnabled = false
+    if teleportThread then
+        task.cancel(teleportThread)
+        teleportThread = nil
+    end
+end
 
 -- =====================
 -- HIGHLIGHT
@@ -231,6 +321,13 @@ local function onPlayerAdded(player)
 end
 
 Players.PlayerRemoving:Connect(cleanupPlayer)
+
+-- Re-apply texture and bullet sound on respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    if Settings.TextureEnabled then applyTexture() end
+    if Settings.BulletSoundEnabled then enableBulletSound() end
+end)
 
 for _, p in ipairs(Players:GetPlayers()) do onPlayerAdded(p) end
 Players.PlayerAdded:Connect(onPlayerAdded)
@@ -418,50 +515,116 @@ VisualsTab:CreateSlider({
 
 VisualsTab:CreateLabel("Players beyond max distance are hidden from all ESP.")
 
--- ── Combat Tab ────────────────────────────────────────
-local CombatTab = Window:CreateTab("Combat", 4483362458)
+-- ── Effects Tab ───────────────────────────────────────
+local EffectsTab = Window:CreateTab("Effects", 4483362458)
 
-CombatTab:CreateSection("Hitbox Expander")
+EffectsTab:CreateSection("Character Texture")
 
-local HitboxToggle = CombatTab:CreateToggle({
-    Name         = "Enable Hitbox Expander",
+EffectsTab:CreateToggle({
+    Name         = "Apply Custom Texture",
     CurrentValue = false,
-    Flag         = "HitboxToggle",
+    Flag         = "TextureToggle",
     Callback     = function(v)
-        _G.HitboxEnabled = v
-    end,
-})
-UIToggles["HitboxToggle"] = HitboxToggle
-
-CombatTab:CreateSlider({
-    Name         = "Hitbox Size",
-    Range        = {1, 100},
-    Increment    = 1,
-    Suffix       = "x",
-    CurrentValue = 10,
-    Flag         = "HitboxSize",
-    Callback     = function(v)
-        _G.HitboxSize = v
-    end,
-})
-
-CombatTab:CreateSection("Target Part")
-
-CombatTab:CreateDropdown({
-    Name            = "Target Part",
-    Options         = DROPDOWN_OPTIONS,
-    CurrentOption   = {"Head"},
-    MultipleOptions = false,
-    Flag            = "HitboxTargetPart",
-    Callback        = function(selected)
-        local choice = type(selected) == "table" and selected[1] or selected
-        if choice then
-            _G.HitboxPart = choice
+        Settings.TextureEnabled = v
+        if v then
+            applyTexture()
+        else
+            removeTexture()
         end
     end,
 })
 
-CombatTab:CreateLabel("Expands the selected part on all enemy characters.")
+EffectsTab:CreateLabel("Texture ID: 5226483487 — applies to all visible body parts.")
+
+EffectsTab:CreateSection("Bullet Hit Sound")
+
+EffectsTab:CreateToggle({
+    Name         = "Enable Bullet Hit Sound",
+    CurrentValue = false,
+    Flag         = "BulletSoundToggle",
+    Callback     = function(v)
+        Settings.BulletSoundEnabled = v
+        if v then
+            enableBulletSound()
+        else
+            disableBulletSound()
+        end
+    end,
+})
+
+EffectsTab:CreateInput({
+    Name        = "Custom Sound ID",
+    PlaceholderText = "e.g. 832380497",
+    RemoveTextAfterFocusLost = false,
+    Flag        = "BulletSoundId",
+    Callback    = function(v)
+        if v and v ~= "" then
+            Settings.BulletSoundId = v
+            if Settings.BulletSoundEnabled then
+                setupBulletSound()
+            end
+        end
+    end,
+})
+
+EffectsTab:CreateLabel("Default sound ID: 832380497. Plays when your character takes damage.")
+
+-- ── Rage Tab ──────────────────────────────────────────
+local RageTab = Window:CreateTab("Rage", 4483362458)
+
+RageTab:CreateSection("Teleport")
+
+local TeleportToggle = RageTab:CreateToggle({
+    Name         = "Teleport To All Players",
+    CurrentValue = false,
+    Flag         = "TeleportToggle",
+    Callback     = function(v)
+        Settings.TeleportLoopEnabled = v
+        if v then
+            startTeleportLoop()
+        else
+            stopTeleportLoop()
+        end
+    end,
+})
+UIToggles["TeleportToggle"] = TeleportToggle
+
+RageTab:CreateSlider({
+    Name         = "Teleport Delay",
+    Range        = {1, 10},
+    Increment    = 1,
+    Suffix       = "s",
+    CurrentValue = 2,
+    Flag         = "TeleportDelay",
+    Callback     = function(v)
+        Settings.TeleportDelay = v
+    end,
+})
+
+RageTab:CreateButton({
+    Name     = "Teleport To Random Player",
+    Callback = function()
+        local others = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then table.insert(others, p) end
+        end
+        if #others == 0 then
+            Rayfield:Notify({ Title = "Rage", Content = "No other players found.", Duration = 2 })
+            return
+        end
+        local target    = others[math.random(1, #others)]
+        local targetHRP = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+        local localHRP  = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if targetHRP and localHRP then
+            localHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+            Rayfield:Notify({ Title = "Rage", Content = "Teleported to " .. target.Name, Duration = 2 })
+        else
+            Rayfield:Notify({ Title = "Rage", Content = "Could not teleport — character not loaded.", Duration = 2 })
+        end
+    end,
+})
+
+RageTab:CreateLabel("Loop teleports through every player one by one at the set delay.")
 
 -- ── Keybinds Tab ──────────────────────────────────────
 local KeybindsTab = Window:CreateTab("Keybinds", 4483362458)
@@ -531,19 +694,24 @@ KeybindsTab:CreateKeybind({
     end,
 })
 
-KeybindsTab:CreateSection("Combat Keybinds")
+KeybindsTab:CreateSection("Rage Keybinds")
 
 KeybindsTab:CreateKeybind({
-    Name           = "Toggle Hitbox",
+    Name           = "Toggle Teleport Loop",
     CurrentKeybind = "F4",
     HoldToInteract = false,
-    Flag           = "KeyHitbox",
+    Flag           = "KeyTeleport",
     Callback       = function()
-        _G.HitboxEnabled = not _G.HitboxEnabled
-        if UIToggles["HitboxToggle"] then UIToggles["HitboxToggle"]:Set(_G.HitboxEnabled) end
+        Settings.TeleportLoopEnabled = not Settings.TeleportLoopEnabled
+        if UIToggles["TeleportToggle"] then UIToggles["TeleportToggle"]:Set(Settings.TeleportLoopEnabled) end
+        if Settings.TeleportLoopEnabled then
+            startTeleportLoop()
+        else
+            stopTeleportLoop()
+        end
         Rayfield:Notify({
-            Title    = "Anarchying It V.1",
-            Content  = "Hitbox " .. (_G.HitboxEnabled and "Enabled" or "Disabled"),
+            Title    = "Rage",
+            Content  = "Teleport Loop " .. (Settings.TeleportLoopEnabled and "Enabled" or "Disabled"),
             Duration = 1.5,
         })
     end,
