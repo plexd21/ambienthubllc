@@ -4,8 +4,6 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local TweenService = game:GetService("TweenService")
-local SoundService = game:GetService("SoundService")
 
 -- Load Rayfield
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -20,9 +18,7 @@ local Settings = {
     FillTransparency = 0.5,
     MaxDistance = 10000,
     NameSize = 14,
-    TextureEnabled = false,
-    BulletSoundEnabled = false,
-    BulletSoundId = "832380497",
+    TeleportTarget = nil,
     TeleportLoopEnabled = false,
     TeleportDelay = 2,
 }
@@ -30,111 +26,46 @@ local Settings = {
 local nameBillboards     = {}
 local distanceBillboards = {}
 local UIToggles          = {}
+local teleportThread     = nil
+local playerDropdown     = nil
 
 -- =====================
--- TEXTURE
+-- TELEPORT
 -- =====================
 
-local TEXTURE_ID = "rbxassetid://5226483487"
-local appliedTextures = {}
-
-local function applyTexture()
-    local character = LocalPlayer.Character
-    if not character then return end
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            -- Remove existing decals/textures we added
-            for _, d in ipairs(part:GetChildren()) do
-                if d:IsA("Decal") and d.Name == "ESPTexture" then d:Destroy() end
-            end
-            for _, face in ipairs({
-                Enum.NormalId.Front, Enum.NormalId.Back,
-                Enum.NormalId.Left,  Enum.NormalId.Right,
-                Enum.NormalId.Top,   Enum.NormalId.Bottom,
-            }) do
-                local decal = Instance.new("Decal")
-                decal.Name     = "ESPTexture"
-                decal.Texture  = TEXTURE_ID
-                decal.Face     = face
-                decal.Parent   = part
-                table.insert(appliedTextures, decal)
-            end
+local function getPlayerNames()
+    local names = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(names, p.Name)
         end
     end
-    -- Also apply to Shirt/Pants by removing them and using decals
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        for _, obj in ipairs(character:GetChildren()) do
-            if obj:IsA("Shirt") or obj:IsA("Pants") then
-                obj.Parent = nil
-                table.insert(appliedTextures, obj) -- store for restoration
-            end
-        end
+    return names
+end
+
+local function teleportToTarget()
+    local target = Settings.TeleportTarget
+    if not target or target == "" then
+        Rayfield:Notify({ Title = "Rage", Content = "No player selected.", Duration = 2 })
+        return
+    end
+
+    local targetPlayer = Players:FindFirstChild(target)
+    if not targetPlayer then
+        Rayfield:Notify({ Title = "Rage", Content = target .. " is not in the game.", Duration = 2 })
+        return
+    end
+
+    local targetHRP = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local localHRP  = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+    if targetHRP and localHRP then
+        localHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+        Rayfield:Notify({ Title = "Rage", Content = "Teleported to " .. target, Duration = 1.5 })
+    else
+        Rayfield:Notify({ Title = "Rage", Content = "Could not teleport — character not loaded.", Duration = 2 })
     end
 end
-
-local function removeTexture()
-    for _, d in ipairs(appliedTextures) do
-        if d and d.Parent then
-            d:Destroy()
-        elseif d and (d:IsA("Shirt") or d:IsA("Pants")) then
-            d.Parent = LocalPlayer.Character
-        end
-    end
-    appliedTextures = {}
-end
-
--- =====================
--- BULLET SOUND
--- =====================
-
-local bulletSound = nil
-local bulletConnection = nil
-
-local function setupBulletSound()
-    if bulletSound then bulletSound:Destroy() end
-    bulletSound = Instance.new("Sound")
-    bulletSound.Name     = "BulletHitSound"
-    bulletSound.SoundId  = "rbxassetid://" .. Settings.BulletSoundId
-    bulletSound.Volume   = 1
-    bulletSound.RollOffMaxDistance = 999999
-    bulletSound.Parent   = SoundService
-end
-
-local function enableBulletSound()
-    setupBulletSound()
-    -- Listen for the local character taking damage as a proxy for being shot
-    local character = LocalPlayer.Character
-    if not character then return end
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-
-    if bulletConnection then bulletConnection:Disconnect() end
-    bulletConnection = humanoid.HealthChanged:Connect(function(newHealth)
-        if not Settings.BulletSoundEnabled then return end
-        if newHealth < humanoid.MaxHealth then
-            if bulletSound and not bulletSound.IsPlaying then
-                bulletSound:Play()
-            end
-        end
-    end)
-end
-
-local function disableBulletSound()
-    if bulletConnection then
-        bulletConnection:Disconnect()
-        bulletConnection = nil
-    end
-    if bulletSound then
-        bulletSound:Stop()
-    end
-end
-
--- =====================
--- TELEPORT LOOP
--- =====================
-
-local teleportThread = nil
 
 local function startTeleportLoop()
     if teleportThread then
@@ -144,26 +75,8 @@ local function startTeleportLoop()
 
     teleportThread = task.spawn(function()
         while Settings.TeleportLoopEnabled do
-            for _, player in ipairs(Players:GetPlayers()) do
-                if not Settings.TeleportLoopEnabled then break end
-                if player == LocalPlayer then continue end
-
-                local targetChar = player.Character
-                local targetHRP  = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-                local localChar  = LocalPlayer.Character
-                local localHRP   = localChar and localChar:FindFirstChild("HumanoidRootPart")
-
-                if targetHRP and localHRP then
-                    localHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
-                    Rayfield:Notify({
-                        Title    = "Rage",
-                        Content  = "Teleported to " .. player.Name,
-                        Duration = 1,
-                    })
-                end
-
-                task.wait(Settings.TeleportDelay)
-            end
+            teleportToTarget()
+            task.wait(Settings.TeleportDelay)
         end
     end)
 end
@@ -175,6 +88,37 @@ local function stopTeleportLoop()
         teleportThread = nil
     end
 end
+
+-- Keep dropdown options fresh as players join/leave
+local function refreshPlayerDropdown()
+    if not playerDropdown then return end
+    local names = getPlayerNames()
+    -- Rayfield dropdowns can be refreshed by calling :Refresh() if available,
+    -- otherwise we update the options table directly
+    pcall(function()
+        playerDropdown:Refresh(names, true)
+    end)
+end
+
+Players.PlayerAdded:Connect(function(p)
+    if p ~= LocalPlayer then
+        task.wait(1)
+        refreshPlayerDropdown()
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if Settings.TeleportTarget == p.Name then
+        Settings.TeleportTarget = nil
+        stopTeleportLoop()
+        if UIToggles["TeleportLoopToggle"] then
+            UIToggles["TeleportLoopToggle"]:Set(false)
+        end
+        Rayfield:Notify({ Title = "Rage", Content = p.Name .. " left the game.", Duration = 2 })
+    end
+    task.wait(0.1)
+    refreshPlayerDropdown()
+end)
 
 -- =====================
 -- HIGHLIGHT
@@ -320,17 +264,9 @@ local function onPlayerAdded(player)
     end
 end
 
-Players.PlayerRemoving:Connect(cleanupPlayer)
-
--- Re-apply texture and bullet sound on respawn
-LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(1)
-    if Settings.TextureEnabled then applyTexture() end
-    if Settings.BulletSoundEnabled then enableBulletSound() end
-end)
-
 for _, p in ipairs(Players:GetPlayers()) do onPlayerAdded(p) end
 Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(cleanupPlayer)
 
 -- =====================
 -- LOOPS
@@ -515,82 +451,53 @@ VisualsTab:CreateSlider({
 
 VisualsTab:CreateLabel("Players beyond max distance are hidden from all ESP.")
 
--- ── Effects Tab ───────────────────────────────────────
-local EffectsTab = Window:CreateTab("Effects", 4483362458)
-
-EffectsTab:CreateSection("Character Texture")
-
-EffectsTab:CreateToggle({
-    Name         = "Apply Custom Texture",
-    CurrentValue = false,
-    Flag         = "TextureToggle",
-    Callback     = function(v)
-        Settings.TextureEnabled = v
-        if v then
-            applyTexture()
-        else
-            removeTexture()
-        end
-    end,
-})
-
-EffectsTab:CreateLabel("Texture ID: 5226483487 — applies to all visible body parts.")
-
-EffectsTab:CreateSection("Bullet Hit Sound")
-
-EffectsTab:CreateToggle({
-    Name         = "Enable Bullet Hit Sound",
-    CurrentValue = false,
-    Flag         = "BulletSoundToggle",
-    Callback     = function(v)
-        Settings.BulletSoundEnabled = v
-        if v then
-            enableBulletSound()
-        else
-            disableBulletSound()
-        end
-    end,
-})
-
-EffectsTab:CreateInput({
-    Name        = "Custom Sound ID",
-    PlaceholderText = "e.g. 832380497",
-    RemoveTextAfterFocusLost = false,
-    Flag        = "BulletSoundId",
-    Callback    = function(v)
-        if v and v ~= "" then
-            Settings.BulletSoundId = v
-            if Settings.BulletSoundEnabled then
-                setupBulletSound()
-            end
-        end
-    end,
-})
-
-EffectsTab:CreateLabel("Default sound ID: 832380497. Plays when your character takes damage.")
-
 -- ── Rage Tab ──────────────────────────────────────────
 local RageTab = Window:CreateTab("Rage", 4483362458)
 
 RageTab:CreateSection("Teleport")
 
-local TeleportToggle = RageTab:CreateToggle({
-    Name         = "Teleport To All Players",
+playerDropdown = RageTab:CreateDropdown({
+    Name            = "Select Target Player",
+    Options         = getPlayerNames(),
+    CurrentOption   = {},
+    MultipleOptions = false,
+    Flag            = "TeleportTarget",
+    Callback        = function(selected)
+        local choice = type(selected) == "table" and selected[1] or selected
+        Settings.TeleportTarget = choice or nil
+    end,
+})
+
+RageTab:CreateButton({
+    Name     = "Teleport Once",
+    Callback = function()
+        teleportToTarget()
+    end,
+})
+
+local TeleportLoopToggle = RageTab:CreateToggle({
+    Name         = "Teleport Loop",
     CurrentValue = false,
-    Flag         = "TeleportToggle",
+    Flag         = "TeleportLoopToggle",
     Callback     = function(v)
         Settings.TeleportLoopEnabled = v
         if v then
+            if not Settings.TeleportTarget or Settings.TeleportTarget == "" then
+                Rayfield:Notify({ Title = "Rage", Content = "Select a player first.", Duration = 2 })
+                UIToggles["TeleportLoopToggle"]:Set(false)
+                Settings.TeleportLoopEnabled = false
+                return
+            end
             startTeleportLoop()
         else
             stopTeleportLoop()
         end
     end,
 })
-UIToggles["TeleportToggle"] = TeleportToggle
+UIToggles["TeleportLoopToggle"] = TeleportLoopToggle
 
 RageTab:CreateSlider({
-    Name         = "Teleport Delay",
+    Name         = "Loop Delay",
     Range        = {1, 10},
     Increment    = 1,
     Suffix       = "s",
@@ -601,30 +508,7 @@ RageTab:CreateSlider({
     end,
 })
 
-RageTab:CreateButton({
-    Name     = "Teleport To Random Player",
-    Callback = function()
-        local others = {}
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer then table.insert(others, p) end
-        end
-        if #others == 0 then
-            Rayfield:Notify({ Title = "Rage", Content = "No other players found.", Duration = 2 })
-            return
-        end
-        local target    = others[math.random(1, #others)]
-        local targetHRP = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-        local localHRP  = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if targetHRP and localHRP then
-            localHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
-            Rayfield:Notify({ Title = "Rage", Content = "Teleported to " .. target.Name, Duration = 2 })
-        else
-            Rayfield:Notify({ Title = "Rage", Content = "Could not teleport — character not loaded.", Duration = 2 })
-        end
-    end,
-})
-
-RageTab:CreateLabel("Loop teleports through every player one by one at the set delay.")
+RageTab:CreateLabel("Select a player from the dropdown, then teleport once or enable loop.")
 
 -- ── Keybinds Tab ──────────────────────────────────────
 local KeybindsTab = Window:CreateTab("Keybinds", 4483362458)
@@ -697,13 +581,27 @@ KeybindsTab:CreateKeybind({
 KeybindsTab:CreateSection("Rage Keybinds")
 
 KeybindsTab:CreateKeybind({
-    Name           = "Toggle Teleport Loop",
+    Name           = "Teleport Once",
     CurrentKeybind = "F4",
     HoldToInteract = false,
-    Flag           = "KeyTeleport",
+    Flag           = "KeyTeleportOnce",
     Callback       = function()
+        teleportToTarget()
+    end,
+})
+
+KeybindsTab:CreateKeybind({
+    Name           = "Toggle Teleport Loop",
+    CurrentKeybind = "F5",
+    HoldToInteract = false,
+    Flag           = "KeyTeleportLoop",
+    Callback       = function()
+        if not Settings.TeleportTarget or Settings.TeleportTarget == "" then
+            Rayfield:Notify({ Title = "Rage", Content = "Select a player first.", Duration = 2 })
+            return
+        end
         Settings.TeleportLoopEnabled = not Settings.TeleportLoopEnabled
-        if UIToggles["TeleportToggle"] then UIToggles["TeleportToggle"]:Set(Settings.TeleportLoopEnabled) end
+        if UIToggles["TeleportLoopToggle"] then UIToggles["TeleportLoopToggle"]:Set(Settings.TeleportLoopEnabled) end
         if Settings.TeleportLoopEnabled then
             startTeleportLoop()
         else
