@@ -1,1 +1,1225 @@
-local BinaryEncrypted = table.concat({'01010000','01110101','01110100','00100000','01011001','01101111','01110101','01110010','00100000','01010011','01100011','01110010','01101001','01110000','01110100','00100000','01001000','01100101','01110010','01100101',}) function decode(str) local function binary_to_string(bin) return string.char(tonumber(bin, 2));end;return (str:gsub("(".. ("[01]"):rep(8) .. ")", binary_to_string));end;local Binary = BinaryEncrypted _G.EncodedBinary = decode(Binary);loadstring(_G.EncodedBinary)()
+--// Anarchying It V.2
+--// LocalScript — StarterPlayerScripts
+
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+local LocalPlayer      = Players.LocalPlayer
+
+-- =====================
+-- KEY SYSTEM
+-- =====================
+local VALID_KEY      = "8sjlgIcSHcB3qZFipIBndxMU"
+local DISCORD_LINK   = "https://discord.gg/TctkbgQFsP"
+local SCRIPT_VERSION = "V.2"
+local SCRIPT_CREATOR = "plexd"
+
+-- ── Minimal key gate UI ──────────────────────────────────────────────────────
+local keyGui = Instance.new("ScreenGui")
+keyGui.Name           = "AnarchyKeyGate"
+keyGui.ResetOnSpawn   = false
+keyGui.DisplayOrder   = 999
+keyGui.IgnoreGuiInset = true
+keyGui.Parent         = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Dark overlay
+local overlay = Instance.new("Frame")
+overlay.Size                    = UDim2.new(1, 0, 1, 0)
+overlay.BackgroundColor3        = Color3.fromRGB(10, 10, 10)
+overlay.BackgroundTransparency  = 0.25
+overlay.BorderSizePixel         = 0
+overlay.Parent                  = keyGui
+
+-- Simple card — matches the "My Super Hub" style
+local card = Instance.new("Frame")
+card.Size                   = UDim2.new(0, 320, 0, 230)
+card.Position               = UDim2.new(0.5, -160, 0.5, -115)
+card.BackgroundColor3       = Color3.fromRGB(22, 22, 24)
+card.BackgroundTransparency = 0
+card.BorderSizePixel        = 0
+card.Parent                 = keyGui
+
+local cardCorner = Instance.new("UICorner")
+cardCorner.CornerRadius = UDim.new(0, 10)
+cardCorner.Parent = card
+
+-- Top bar (icon + title row)
+local topBar = Instance.new("Frame")
+topBar.Size             = UDim2.new(1, 0, 0, 46)
+topBar.BackgroundColor3 = Color3.fromRGB(28, 28, 31)
+topBar.BorderSizePixel  = 0
+topBar.Parent           = card
+
+local topCorner = Instance.new("UICorner")
+topCorner.CornerRadius = UDim.new(0, 10)
+topCorner.Parent = topBar
+
+-- Mask bottom corners of topBar
+local topMask = Instance.new("Frame")
+topMask.Size             = UDim2.new(1, 0, 0, 10)
+topMask.Position         = UDim2.new(0, 0, 1, -10)
+topMask.BackgroundColor3 = Color3.fromRGB(28, 28, 31)
+topMask.BorderSizePixel  = 0
+topMask.Parent           = topBar
+
+local titleIcon = Instance.new("TextLabel")
+titleIcon.Size                   = UDim2.new(0, 28, 0, 28)
+titleIcon.Position               = UDim2.new(0, 12, 0.5, -14)
+titleIcon.BackgroundTransparency = 1
+titleIcon.Text                   = "⚡"
+titleIcon.TextSize               = 16
+titleIcon.Font                   = Enum.Font.Gotham
+titleIcon.TextColor3             = Color3.fromRGB(200, 200, 200)
+titleIcon.Parent                 = topBar
+
+local titleLbl = Instance.new("TextLabel")
+titleLbl.Size                   = UDim2.new(1, -50, 1, 0)
+titleLbl.Position               = UDim2.new(0, 42, 0, 0)
+titleLbl.BackgroundTransparency = 1
+titleLbl.Text                   = "Anarchying It " .. SCRIPT_VERSION
+titleLbl.TextColor3             = Color3.fromRGB(235, 235, 235)
+titleLbl.TextSize               = 14
+titleLbl.Font                   = Enum.Font.GothamBold
+titleLbl.TextXAlignment         = Enum.TextXAlignment.Left
+titleLbl.Parent                 = topBar
+
+-- Sub-text
+local subLbl = Instance.new("TextLabel")
+subLbl.Size                   = UDim2.new(1, -24, 0, 18)
+subLbl.Position               = UDim2.new(0, 12, 0, 52)
+subLbl.BackgroundTransparency = 1
+subLbl.Text                   = "by " .. SCRIPT_CREATOR .. " · enter your key"
+subLbl.TextColor3             = Color3.fromRGB(110, 110, 120)
+subLbl.TextSize               = 11
+subLbl.Font                   = Enum.Font.Gotham
+subLbl.TextXAlignment         = Enum.TextXAlignment.Left
+subLbl.Parent                 = card
+
+-- Key input
+local inputBox = Instance.new("TextBox")
+inputBox.Size              = UDim2.new(1, -24, 0, 36)
+inputBox.Position          = UDim2.new(0, 12, 0, 78)
+inputBox.BackgroundColor3  = Color3.fromRGB(32, 32, 36)
+inputBox.BorderSizePixel   = 0
+inputBox.Text              = ""
+inputBox.PlaceholderText   = "Enter Key"
+inputBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 90)
+inputBox.TextColor3        = Color3.fromRGB(220, 220, 220)
+inputBox.TextSize          = 13
+inputBox.Font              = Enum.Font.Gotham
+inputBox.ClearTextOnFocus  = false
+inputBox.Parent            = card
+
+local inputCorner = Instance.new("UICorner")
+inputCorner.CornerRadius = UDim.new(0, 7)
+inputCorner.Parent = inputBox
+
+local inputPad = Instance.new("UIPadding")
+inputPad.PaddingLeft = UDim.new(0, 10)
+inputPad.Parent = inputBox
+
+-- Status
+local statusLbl = Instance.new("TextLabel")
+statusLbl.Size                   = UDim2.new(1, -24, 0, 16)
+statusLbl.Position               = UDim2.new(0, 12, 0, 118)
+statusLbl.BackgroundTransparency = 1
+statusLbl.Text                   = ""
+statusLbl.TextColor3             = Color3.fromRGB(220, 70, 70)
+statusLbl.TextSize               = 11
+statusLbl.Font                   = Enum.Font.Gotham
+statusLbl.TextXAlignment         = Enum.TextXAlignment.Left
+statusLbl.Parent                 = card
+
+-- Button row
+local btnRow = Instance.new("Frame")
+btnRow.Size             = UDim2.new(1, -24, 0, 36)
+btnRow.Position         = UDim2.new(0, 12, 0, 140)
+btnRow.BackgroundTransparency = 1
+btnRow.Parent           = card
+
+local btnLayout = Instance.new("UIListLayout")
+btnLayout.FillDirection = Enum.FillDirection.Horizontal
+btnLayout.Padding       = UDim.new(0, 6)
+btnLayout.Parent        = btnRow
+
+-- Exit button
+local exitBtn = Instance.new("TextButton")
+exitBtn.Size             = UDim2.new(0, 64, 1, 0)
+exitBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 38)
+exitBtn.BorderSizePixel  = 0
+exitBtn.Text             = "↩ Exit"
+exitBtn.TextColor3       = Color3.fromRGB(170, 170, 180)
+exitBtn.TextSize         = 12
+exitBtn.Font             = Enum.Font.Gotham
+exitBtn.Parent           = btnRow
+
+local ec = Instance.new("UICorner") ec.CornerRadius = UDim.new(0,7) ec.Parent = exitBtn
+
+exitBtn.MouseButton1Click:Connect(function()
+    LocalPlayer:Kick("Closed Anarchying It.")
+end)
+
+-- Get Key button
+local getKeyBtn = Instance.new("TextButton")
+getKeyBtn.Size             = UDim2.new(0, 80, 1, 0)
+getKeyBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 38)
+getKeyBtn.BorderSizePixel  = 0
+getKeyBtn.Text             = "🔑 Get key"
+getKeyBtn.TextColor3       = Color3.fromRGB(170, 170, 180)
+getKeyBtn.TextSize         = 12
+getKeyBtn.Font             = Enum.Font.Gotham
+getKeyBtn.Parent           = btnRow
+
+local gkc = Instance.new("UICorner") gkc.CornerRadius = UDim.new(0,7) gkc.Parent = getKeyBtn
+
+getKeyBtn.MouseButton1Click:Connect(function()
+    pcall(function() setclipboard(DISCORD_LINK) end)
+    getKeyBtn.Text = "✅ Copied!"
+    task.delay(2, function() getKeyBtn.Text = "🔑 Get key" end)
+end)
+
+-- Submit button (fills remaining space)
+local submitBtn = Instance.new("TextButton")
+submitBtn.Size             = UDim2.new(1, -156, 1, 0)
+submitBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
+submitBtn.BorderSizePixel  = 0
+submitBtn.Text             = "→ Submit"
+submitBtn.TextColor3       = Color3.fromRGB(235, 235, 235)
+submitBtn.TextSize         = 13
+submitBtn.Font             = Enum.Font.GothamBold
+submitBtn.Parent           = btnRow
+
+local sc = Instance.new("UICorner") sc.CornerRadius = UDim.new(0,7) sc.Parent = submitBtn
+
+-- Footer note
+local footerLbl = Instance.new("TextLabel")
+footerLbl.Size                   = UDim2.new(1, -24, 0, 16)
+footerLbl.Position               = UDim2.new(0, 12, 0, 200)
+footerLbl.BackgroundTransparency = 1
+footerLbl.Text                   = "Join Discord to get your key"
+footerLbl.TextColor3             = Color3.fromRGB(70, 70, 80)
+footerLbl.TextSize               = 10
+footerLbl.Font                   = Enum.Font.Gotham
+footerLbl.TextXAlignment         = Enum.TextXAlignment.Left
+footerLbl.Parent                 = card
+
+-- ── Key validation ───────────────────────────────────────────────────────────
+local keyGranted = false
+
+local function tryKey()
+    local entered = inputBox.Text:gsub("%s+", "")
+    if entered == VALID_KEY then
+        keyGranted = true
+        statusLbl.Text       = "✔  Access granted!"
+        statusLbl.TextColor3 = Color3.fromRGB(80, 220, 100)
+        submitBtn.Text       = "Loading..."
+        task.wait(0.7)
+        TweenService:Create(card,    TweenInfo.new(0.35), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(overlay, TweenInfo.new(0.35), {BackgroundTransparency = 1}):Play()
+        for _, d in ipairs(card:GetDescendants()) do
+            if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
+                TweenService:Create(d, TweenInfo.new(0.25), {TextTransparency = 1}):Play()
+            end
+        end
+        task.wait(0.4)
+        keyGui:Destroy()
+    else
+        statusLbl.Text       = "✖  Invalid key."
+        statusLbl.TextColor3 = Color3.fromRGB(220, 60, 60)
+    end
+end
+
+submitBtn.MouseButton1Click:Connect(tryKey)
+inputBox.FocusLost:Connect(function(enter) if enter then tryKey() end end)
+
+repeat task.wait(0.1) until keyGranted
+
+-- =====================
+-- LOAD RAYFIELD
+-- =====================
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+-- =====================
+-- REGION DETECTION
+-- =====================
+local playerRegion = "Detecting..."
+task.spawn(function()
+    local ok, res = pcall(function()
+        return game:HttpGet("http://ip-api.com/line/?fields=countryCode,regionName")
+    end)
+    if ok and res then
+        local lines  = res:split("\n")
+        local cc     = (lines[1] or "??"):gsub("%s+","")
+        local region = (lines[2] or "Unknown"):gsub("^%s*(.-)%s*$","%1")
+        playerRegion = region .. " (" .. cc .. ")"
+    else
+        playerRegion = "Unavailable"
+    end
+end)
+
+-- =====================
+-- STATE
+-- =====================
+local Settings = {
+    ESPEnabled             = false,
+    NamesEnabled           = false,
+    DistanceEnabled        = false,
+    TracerEnabled          = false,
+    FillColor              = Color3.fromRGB(255, 0, 0),
+    OutlineColor           = Color3.fromRGB(255, 255, 255),
+    FillTransparency       = 0.5,
+    MaxDistance            = 10000,
+    NameSize               = 14,
+    TeleportTarget         = nil,
+    TeleportLoopEnabled    = false,
+    TeleportDelay          = 2,
+    ProximityAlertsEnabled = false,
+    ProximityDistance      = 50,
+    ProximitySFXEnabled    = true,
+    SpeedEnabled           = false,
+    SpeedMultiplier        = 1,
+    NoclipEnabled          = false,
+}
+
+local nameBillboards     = {}
+local distanceBillboards = {}
+local tracerLines        = {}
+local UIToggles          = {}
+local teleportThread     = nil
+local playerDropdown     = nil
+local speedPushConn      = nil
+local noclipConn         = nil
+local proxSFXCooldown    = {}
+
+-- =====================
+-- UNINJECT
+-- =====================
+local function uninject()
+    Settings.TeleportLoopEnabled    = false
+    Settings.SpeedEnabled           = false
+    Settings.ProximityAlertsEnabled = false
+    Settings.NoclipEnabled          = false
+
+    if teleportThread then task.cancel(teleportThread) teleportThread = nil end
+    if speedPushConn  then speedPushConn:Disconnect()  speedPushConn  = nil end
+    if noclipConn     then noclipConn:Disconnect()     noclipConn     = nil end
+
+    pcall(function()
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then hum.WalkSpeed = 16 end
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = true end
+            end
+        end
+    end)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        pcall(function()
+            if player.Character then
+                local h = player.Character:FindFirstChild("PlayerHighlight")
+                if h then h:Destroy() end
+            end
+        end)
+        if nameBillboards[player]     then nameBillboards[player]:Destroy()     nameBillboards[player]     = nil end
+        if distanceBillboards[player] then distanceBillboards[player]:Destroy() distanceBillboards[player] = nil end
+        if tracerLines[player]        then tracerLines[player]:Remove()         tracerLines[player]        = nil end
+    end
+
+    pcall(function()
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        if pg then
+            for _, gui in ipairs(pg:GetChildren()) do
+                if gui:IsA("ScreenGui") and gui.Name == "ProximityAlerts" then gui:Destroy() end
+            end
+        end
+    end)
+
+    pcall(function() Rayfield:Destroy() end)
+    task.wait(0.3)
+    LocalPlayer:Kick("Anarchying It has been uninjected. Please rejoin.")
+end
+
+-- =====================
+-- TELEPORT
+-- =====================
+local function getPlayerNames()
+    local names = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then table.insert(names, p.Name) end
+    end
+    return names
+end
+
+local function teleportToTarget()
+    local target = Settings.TeleportTarget
+    if not target or target == "" then
+        Rayfield:Notify({ Title = "Rage", Content = "No player selected.", Duration = 2 })
+        return
+    end
+    local tp = Players:FindFirstChild(target)
+    if not tp then
+        Rayfield:Notify({ Title = "Rage", Content = target .. " not in game.", Duration = 2 })
+        return
+    end
+    local tHRP = tp.Character and tp.Character:FindFirstChild("HumanoidRootPart")
+    local lHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if tHRP and lHRP then
+        lHRP.CFrame = tHRP.CFrame + Vector3.new(0, 3, 0)
+        Rayfield:Notify({ Title = "Rage", Content = "Teleported to " .. target, Duration = 1.5 })
+    else
+        Rayfield:Notify({ Title = "Rage", Content = "Character not loaded.", Duration = 2 })
+    end
+end
+
+local function startTeleportLoop()
+    if teleportThread then task.cancel(teleportThread) teleportThread = nil end
+    teleportThread = task.spawn(function()
+        while Settings.TeleportLoopEnabled do
+            teleportToTarget()
+            task.wait(Settings.TeleportDelay)
+        end
+    end)
+end
+
+local function stopTeleportLoop()
+    Settings.TeleportLoopEnabled = false
+    if teleportThread then task.cancel(teleportThread) teleportThread = nil end
+end
+
+local function refreshPlayerDropdown()
+    if not playerDropdown then return end
+    pcall(function() playerDropdown:Refresh(getPlayerNames(), true) end)
+end
+
+Players.PlayerAdded:Connect(function(p)
+    if p ~= LocalPlayer then task.wait(1) refreshPlayerDropdown() end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if Settings.TeleportTarget == p.Name then
+        Settings.TeleportTarget = nil
+        stopTeleportLoop()
+        if UIToggles["TeleportLoopToggle"] then UIToggles["TeleportLoopToggle"]:Set(false) end
+        Rayfield:Notify({ Title = "Rage", Content = p.Name .. " left.", Duration = 2 })
+    end
+    task.wait(0.1)
+    refreshPlayerDropdown()
+end)
+
+-- =====================
+-- HIGHLIGHT / NAME / DISTANCE / TRACER
+-- =====================
+local function addHighlight(character)
+    if not Settings.ESPEnabled then return end
+    if character:FindFirstChild("PlayerHighlight") then return end
+    local h = Instance.new("Highlight")
+    h.Name                = "PlayerHighlight"
+    h.FillColor           = Settings.FillColor
+    h.OutlineColor        = Settings.OutlineColor
+    h.FillTransparency    = Settings.FillTransparency
+    h.OutlineTransparency = 0
+    h.Parent              = character
+end
+local function removeHighlight(character)
+    local h = character:FindFirstChild("PlayerHighlight")
+    if h then h:Destroy() end
+end
+
+local function addNameBillboard(player, character)
+    if not Settings.NamesEnabled then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    if nameBillboards[player] then nameBillboards[player]:Destroy() end
+    local bg = Instance.new("BillboardGui")
+    bg.Name        = "ESPName"
+    bg.Adornee     = hrp
+    bg.Size        = UDim2.new(0, 200, 0, 30)
+    bg.StudsOffset = Vector3.new(0, 3, 0)
+    bg.AlwaysOnTop = true
+    bg.Parent      = hrp
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Size                   = UDim2.new(1, 0, 1, 0)
+    lbl.Text                   = player.Name
+    lbl.TextColor3             = Color3.fromRGB(255, 255, 255)
+    lbl.TextStrokeTransparency = 0
+    lbl.TextScaled             = false
+    lbl.TextSize               = Settings.NameSize
+    lbl.Font                   = Enum.Font.GothamBold
+    lbl.Parent                 = bg
+    nameBillboards[player] = bg
+end
+local function removeNameBillboard(player)
+    if nameBillboards[player] then nameBillboards[player]:Destroy() nameBillboards[player] = nil end
+end
+
+local function addDistanceBillboard(player, character)
+    if not Settings.DistanceEnabled then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    if distanceBillboards[player] then distanceBillboards[player]:Destroy() end
+    local bg = Instance.new("BillboardGui")
+    bg.Name        = "ESPDistance"
+    bg.Adornee     = hrp
+    bg.Size        = UDim2.new(0, 200, 0, 20)
+    bg.StudsOffset = Vector3.new(0, 1.5, 0)
+    bg.AlwaysOnTop = true
+    bg.Parent      = hrp
+    local lbl = Instance.new("TextLabel")
+    lbl.Name                   = "DistanceLabel"
+    lbl.BackgroundTransparency = 1
+    lbl.Size                   = UDim2.new(1, 0, 1, 0)
+    lbl.Text                   = "0m"
+    lbl.TextColor3             = Color3.fromRGB(255, 220, 50)
+    lbl.TextStrokeTransparency = 0
+    lbl.TextScaled             = false
+    lbl.TextSize               = 13
+    lbl.Font                   = Enum.Font.Gotham
+    lbl.Parent                 = bg
+    distanceBillboards[player] = bg
+end
+local function removeDistanceBillboard(player)
+    if distanceBillboards[player] then distanceBillboards[player]:Destroy() distanceBillboards[player] = nil end
+end
+
+local function addTracer(player)
+    if not Settings.TracerEnabled then return end
+    if tracerLines[player] then tracerLines[player]:Remove() end
+    local line = Drawing.new("Line")
+    line.Visible      = false
+    line.Color        = Color3.fromRGB(255, 50, 50)
+    line.Thickness    = 1
+    line.Transparency = 1
+    tracerLines[player] = line
+end
+local function removeTracer(player)
+    if tracerLines[player] then tracerLines[player]:Remove() tracerLines[player] = nil end
+end
+local function removeAllTracers()
+    for p, line in pairs(tracerLines) do
+        if line then line:Remove() end
+        tracerLines[p] = nil
+    end
+end
+
+local function cleanupPlayer(player)
+    if player.Character then removeHighlight(player.Character) end
+    removeNameBillboard(player)
+    removeDistanceBillboard(player)
+    removeTracer(player)
+end
+
+local function refreshCharacter(player, character)
+    if not character then return end
+    removeHighlight(character)
+    removeNameBillboard(player)
+    removeDistanceBillboard(player)
+    removeTracer(player)
+    addHighlight(character)
+    addNameBillboard(player, character)
+    addDistanceBillboard(player, character)
+    addTracer(player)
+end
+
+local function refreshAll()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if player.Character then refreshCharacter(player, player.Character) end
+    end
+end
+
+local function onPlayerAdded(player)
+    if player == LocalPlayer then return end
+    player.CharacterAdded:Connect(function(char)
+        task.wait(1)
+        refreshCharacter(player, char)
+    end)
+    if player.Character then refreshCharacter(player, player.Character) end
+end
+
+for _, p in ipairs(Players:GetPlayers()) do onPlayerAdded(p) end
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(cleanupPlayer)
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        refreshAll()
+    end
+end)
+
+-- =====================
+-- SPEED  (1x–100x)
+-- =====================
+local DEFAULT_WALKSPEED = 16
+local DEFAULT_HIPHEIGHT = 0
+
+local function applySpeed(multiplier)
+    if not Settings.SpeedEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    hum.WalkSpeed = math.min(DEFAULT_WALKSPEED * multiplier, 200)
+    if DEFAULT_HIPHEIGHT == 0 then DEFAULT_HIPHEIGHT = hum.HipHeight end
+    hum.HipHeight = DEFAULT_HIPHEIGHT
+end
+
+local function resetSpeed()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = DEFAULT_WALKSPEED end
+end
+
+local function startSpeedPusher()
+    if speedPushConn then speedPushConn:Disconnect() end
+    speedPushConn = RunService.Heartbeat:Connect(function()
+        if not Settings.SpeedEnabled or Settings.SpeedMultiplier <= 12 then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hrp or not hum then return end
+        if hum.MoveDirection.Magnitude == 0 then return end
+        local overflow = (DEFAULT_WALKSPEED * Settings.SpeedMultiplier) - 200
+        if overflow <= 0 then return end
+        hrp.CFrame = hrp.CFrame + (hum.MoveDirection * overflow * 0.016)
+    end)
+end
+
+startSpeedPusher()
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    DEFAULT_HIPHEIGHT = 0
+    if Settings.SpeedEnabled then applySpeed(Settings.SpeedMultiplier) end
+end)
+
+-- =====================
+-- NOCLIP  (workspace-wide phase-through)
+-- Every Heartbeat we disable CanCollide on our character's parts.
+-- We also set CanCollide false on any workspace part our HRP is touching,
+-- then restore them immediately after — this phases through EVERYTHING
+-- including terrain-adjacent parts and moving obstacles.
+-- =====================
+local noclipTouchedParts = {}  -- parts we temporarily disabled
+
+local function startNoclip()
+    if noclipConn then noclipConn:Disconnect() end
+    noclipConn = RunService.Heartbeat:Connect(function()
+        -- Restore previously touched world parts
+        for part, orig in pairs(noclipTouchedParts) do
+            pcall(function() part.CanCollide = orig end)
+        end
+        noclipTouchedParts = {}
+
+        if not Settings.NoclipEnabled then return end
+
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+
+        -- Disable collision on all character parts
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+
+        -- Also disable any touching workspace parts (so we phase through walls/floors)
+        if hrp then
+            local touching = hrp:GetTouchingParts()
+            for _, part in ipairs(touching) do
+                -- Only target parts NOT in our character
+                if part:IsDescendantOf(char) then continue end
+                if part:IsA("BasePart") then
+                    noclipTouchedParts[part] = part.CanCollide
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function stopNoclip()
+    Settings.NoclipEnabled = false
+    -- Restore all world parts we touched
+    for part, orig in pairs(noclipTouchedParts) do
+        pcall(function() part.CanCollide = orig end)
+    end
+    noclipTouchedParts = {}
+    -- Restore character collisions
+    pcall(function()
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = true end
+            end
+        end
+    end)
+end
+
+startNoclip()
+
+-- =====================
+-- PROXIMITY ALERTS + SFX
+-- =====================
+local proximityGui = Instance.new("ScreenGui")
+proximityGui.Name         = "ProximityAlerts"
+proximityGui.ResetOnSpawn = false
+proximityGui.Enabled      = false
+proximityGui.Parent       = LocalPlayer:WaitForChild("PlayerGui")
+
+local proximityFrame = Instance.new("Frame")
+proximityFrame.Name                   = "ProximityContainer"
+proximityFrame.Size                   = UDim2.new(0, 220, 0, 0)
+proximityFrame.Position               = UDim2.new(1, -230, 0, 10)
+proximityFrame.BackgroundTransparency = 1
+proximityFrame.BorderSizePixel        = 0
+proximityFrame.Parent                 = proximityGui
+
+local proximityLayout = Instance.new("UIListLayout")
+proximityLayout.SortOrder = Enum.SortOrder.LayoutOrder
+proximityLayout.Padding   = UDim.new(0, 4)
+proximityLayout.Parent    = proximityFrame
+
+local proximityCards       = {}
+local proxPlayerWasInRange = {}
+
+local function lerp(a, b, t) return a + (b - a) * t end
+local function distanceToColor(dist, maxDist)
+    local t = math.clamp(dist / maxDist, 0, 1)
+    return Color3.fromRGB(
+        math.floor(lerp(255, 0,   t)),
+        math.floor(lerp(140, 255, t)),
+        math.floor(lerp(0,   80,  t))
+    )
+end
+
+local function playProximitySFX()
+    pcall(function()
+        local sfx = Instance.new("Sound")
+        sfx.SoundId              = "rbxassetid://139246456147301"  -- UI button press
+        sfx.Volume               = 0.7
+        sfx.RollOffMaxDistance   = 0
+        sfx.Parent               = workspace
+        sfx:Play()
+        game:GetService("Debris"):AddItem(sfx, 3)
+    end)
+end
+
+local function getOrCreateCard(player)
+    if proximityCards[player] then return proximityCards[player] end
+    local c = Instance.new("Frame")
+    c.Name                   = "Card_" .. player.Name
+    c.Size                   = UDim2.new(1, 0, 0, 54)
+    c.BackgroundColor3       = Color3.fromRGB(15, 15, 15)
+    c.BackgroundTransparency = 0.2
+    c.BorderSizePixel        = 0
+    c.Visible                = false
+    c.Parent                 = proximityFrame
+    local cc2 = Instance.new("UICorner") cc2.CornerRadius = UDim.new(0,6) cc2.Parent = c
+    local accent = Instance.new("Frame")
+    accent.Name             = "Accent"
+    accent.Size             = UDim2.new(0, 4, 1, 0)
+    accent.BackgroundColor3 = Color3.fromRGB(0, 255, 80)
+    accent.BorderSizePixel  = 0
+    accent.Parent           = c
+    local ac2 = Instance.new("UICorner") ac2.CornerRadius = UDim.new(0,6) ac2.Parent = accent
+    local avatarImg = Instance.new("ImageLabel")
+    avatarImg.Size                   = UDim2.new(0, 40, 0, 40)
+    avatarImg.Position               = UDim2.new(0, 10, 0.5, -20)
+    avatarImg.BackgroundColor3       = Color3.fromRGB(40,40,40)
+    avatarImg.BorderSizePixel        = 0
+    avatarImg.Image                  = "rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=48&h=48"
+    avatarImg.Parent                 = c
+    local av2 = Instance.new("UICorner") av2.CornerRadius = UDim.new(0.5,0) av2.Parent = avatarImg
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size                   = UDim2.new(1,-62,0,22)
+    nameLabel.Position               = UDim2.new(0,58,0,8)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text                   = player.Name
+    nameLabel.TextColor3             = Color3.fromRGB(240,240,240)
+    nameLabel.TextSize               = 13
+    nameLabel.Font                   = Enum.Font.GothamBold
+    nameLabel.TextXAlignment         = Enum.TextXAlignment.Left
+    nameLabel.TextTruncate           = Enum.TextTruncate.AtEnd
+    nameLabel.Parent                 = c
+    local distLabel = Instance.new("TextLabel")
+    distLabel.Size                   = UDim2.new(1,-62,0,18)
+    distLabel.Position               = UDim2.new(0,58,0,30)
+    distLabel.BackgroundTransparency = 1
+    distLabel.Text                   = "0m away"
+    distLabel.TextColor3             = Color3.fromRGB(180,180,180)
+    distLabel.TextSize               = 11
+    distLabel.Font                   = Enum.Font.Gotham
+    distLabel.TextXAlignment         = Enum.TextXAlignment.Left
+    distLabel.Parent                 = c
+    proximityCards[player] = { frame = c, accent = accent, distLabel = distLabel }
+    return proximityCards[player]
+end
+
+local function removeProximityCard(player)
+    if proximityCards[player] then
+        proximityCards[player].frame:Destroy()
+        proximityCards[player] = nil
+    end
+    proxPlayerWasInRange[player] = nil
+end
+Players.PlayerRemoving:Connect(removeProximityCard)
+
+-- =====================
+-- RENDER LOOP
+-- =====================
+RunService.RenderStepped:Connect(function()
+    local localChar = LocalPlayer.Character
+    local localHRP  = localChar and localChar:FindFirstChild("HumanoidRootPart")
+    local camera    = workspace.CurrentCamera
+
+    -- Tracers
+    if Settings.TracerEnabled and localHRP and camera then
+        local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+        for player, line in pairs(tracerLines) do
+            if not line then tracerLines[player] = nil continue end
+            local char = player.Character
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (localHRP.Position - hrp.Position).Magnitude
+                if dist <= Settings.MaxDistance then
+                    local sp, onScreen = camera:WorldToViewportPoint(hrp.Position)
+                    if onScreen then
+                        line.From         = screenCenter
+                        line.To           = Vector2.new(sp.X, sp.Y)
+                        line.Visible      = true
+                        line.Transparency = 1
+                    else
+                        line.Visible = false
+                    end
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
+        end
+    else
+        for _, line in pairs(tracerLines) do
+            if line then line.Visible = false end
+        end
+    end
+
+    -- Distance labels
+    if Settings.DistanceEnabled and localHRP then
+        for player, bg in pairs(distanceBillboards) do
+            if not bg or not bg.Parent then distanceBillboards[player] = nil continue end
+            local char = player.Character
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp then continue end
+            local dist        = math.floor((localHRP.Position - hrp.Position).Magnitude)
+            local beyondRange = dist > Settings.MaxDistance
+            local label       = bg:FindFirstChild("DistanceLabel")
+            bg.Enabled = not beyondRange
+            if label then label.Text = dist .. "m" end
+            local highlight = char:FindFirstChild("PlayerHighlight")
+            if highlight then highlight.Enabled = Settings.ESPEnabled and not beyondRange end
+            local nameBg = nameBillboards[player]
+            if nameBg then nameBg.Enabled = Settings.NamesEnabled and not beyondRange end
+        end
+    end
+
+    -- Proximity alerts
+    if not Settings.ProximityAlertsEnabled or not localHRP then
+        for _, cardData in pairs(proximityCards) do
+            if cardData.frame then cardData.frame.Visible = false end
+        end
+        return
+    end
+
+    local maxDist = Settings.ProximityDistance
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        local char = player.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            local cd = proximityCards[player]
+            if cd then cd.frame.Visible = false end
+            proxPlayerWasInRange[player] = false
+            continue
+        end
+        local dist    = math.floor((localHRP.Position - hrp.Position).Magnitude)
+        local inRange = dist <= maxDist
+        local wasRange = proxPlayerWasInRange[player] or false
+        if inRange then
+            if not wasRange and Settings.ProximitySFXEnabled then playProximitySFX() end
+            proxPlayerWasInRange[player] = true
+            local cardData = getOrCreateCard(player)
+            cardData.frame.Visible           = true
+            local col = distanceToColor(dist, maxDist)
+            cardData.accent.BackgroundColor3 = col
+            cardData.distLabel.Text          = dist .. "m away"
+            cardData.distLabel.TextColor3    = col
+        else
+            proxPlayerWasInRange[player] = false
+            local cd = proximityCards[player]
+            if cd then cd.frame.Visible = false end
+        end
+    end
+end)
+
+-- =====================
+-- RAYFIELD WINDOW
+-- =====================
+local Window = Rayfield:CreateWindow({
+    Name            = "Anarchying It " .. SCRIPT_VERSION,
+    LoadingTitle    = "Anarchying It " .. SCRIPT_VERSION,
+    LoadingSubtitle = "by " .. SCRIPT_CREATOR,
+    Theme           = "Default",
+    ConfigurationSaving = {
+        Enabled    = true,
+        FolderName = "AnarchyingIt",
+        FileName   = "Config"
+    },
+    KeySystem = false,
+})
+
+-- ══════════════════════════════════════════
+-- TAB 1 — INFORMATION
+-- ══════════════════════════════════════════
+local InfoTab = Window:CreateTab("Information", 4483362458)
+
+InfoTab:CreateSection("Script Info")
+InfoTab:CreateLabel("Script:   Anarchying It " .. SCRIPT_VERSION)
+InfoTab:CreateLabel("Creator:  " .. SCRIPT_CREATOR)
+
+InfoTab:CreateSection("Player Info")
+InfoTab:CreateLabel("Username:  " .. LocalPlayer.Name)
+InfoTab:CreateLabel("User ID:   " .. tostring(LocalPlayer.UserId))
+
+task.spawn(function()
+    local waited = 0
+    while playerRegion == "Detecting..." and waited < 10 do
+        task.wait(0.5); waited = waited + 0.5
+    end
+    Rayfield:Notify({ Title = "Region Detected", Content = playerRegion, Duration = 6 })
+end)
+
+InfoTab:CreateSection("Uninject")
+InfoTab:CreateButton({
+    Name     = "Uninject Script",
+    Callback = function()
+        Rayfield:Notify({ Title = "Anarchying It", Content = "Uninjecting — you will be kicked.", Duration = 2 })
+        task.wait(1.2)
+        uninject()
+    end,
+})
+
+-- ══════════════════════════════════════════
+-- TAB 2 — VISUALS
+-- ══════════════════════════════════════════
+local VisualsTab = Window:CreateTab("Visuals", 4483362458)
+
+VisualsTab:CreateSection("Highlight ESP")
+
+local ESPToggle = VisualsTab:CreateToggle({
+    Name = "Enable Highlights", CurrentValue = false, Flag = "ESPToggle",
+    Callback = function(v) Settings.ESPEnabled = v refreshAll() end,
+})
+UIToggles["ESPToggle"] = ESPToggle
+
+VisualsTab:CreateColorPicker({ Name = "Fill Color",    Color = Color3.fromRGB(255,0,0),   Flag = "FillColor",    Callback = function(v) Settings.FillColor    = v refreshAll() end })
+VisualsTab:CreateColorPicker({ Name = "Outline Color", Color = Color3.fromRGB(255,255,255), Flag = "OutlineColor", Callback = function(v) Settings.OutlineColor = v refreshAll() end })
+
+VisualsTab:CreateSlider({
+    Name = "Fill Transparency", Range = {0,10}, Increment = 1, Suffix = "", CurrentValue = 5, Flag = "FillTransparency",
+    Callback = function(v)
+        Settings.FillTransparency = v / 10
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player == LocalPlayer then continue end
+            if player.Character then
+                local h = player.Character:FindFirstChild("PlayerHighlight")
+                if h then h.FillTransparency = Settings.FillTransparency end
+            end
+        end
+    end,
+})
+
+VisualsTab:CreateSection("Name Tags")
+
+local NamesToggle = VisualsTab:CreateToggle({
+    Name = "Show Names", CurrentValue = false, Flag = "NamesToggle",
+    Callback = function(v)
+        Settings.NamesEnabled = v
+        if v then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then addNameBillboard(p, p.Character) end
+            end
+        else
+            for _, p in ipairs(Players:GetPlayers()) do removeNameBillboard(p) end
+        end
+    end,
+})
+UIToggles["NamesToggle"] = NamesToggle
+
+VisualsTab:CreateSlider({
+    Name = "Name Text Size", Range = {8,48}, Increment = 1, Suffix = "px", CurrentValue = 14, Flag = "NameSize",
+    Callback = function(v)
+        Settings.NameSize = v
+        for _, bg in pairs(nameBillboards) do
+            if bg then
+                local lbl = bg:FindFirstChildOfClass("TextLabel")
+                if lbl then lbl.TextSize = v end
+            end
+        end
+    end,
+})
+
+VisualsTab:CreateSection("Distance ESP")
+
+local DistToggle = VisualsTab:CreateToggle({
+    Name = "Show Distance", CurrentValue = false, Flag = "DistToggle",
+    Callback = function(v)
+        Settings.DistanceEnabled = v
+        if v then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then addDistanceBillboard(p, p.Character) end
+            end
+        else
+            for _, p in ipairs(Players:GetPlayers()) do removeDistanceBillboard(p) end
+        end
+    end,
+})
+UIToggles["DistToggle"] = DistToggle
+
+VisualsTab:CreateSlider({
+    Name = "Max Visible Distance", Range = {0,10000}, Increment = 100, Suffix = "m", CurrentValue = 10000, Flag = "MaxDistance",
+    Callback = function(v) Settings.MaxDistance = v end,
+})
+
+local TracerToggle = VisualsTab:CreateToggle({
+    Name = "Show Tracer Lines", CurrentValue = false, Flag = "TracerToggle",
+    Callback = function(v)
+        Settings.TracerEnabled = v
+        if v then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer then addTracer(p) end
+            end
+        else
+            removeAllTracers()
+        end
+    end,
+})
+UIToggles["TracerToggle"] = TracerToggle
+
+VisualsTab:CreateSection("Proximity Alerts")
+
+VisualsTab:CreateToggle({
+    Name = "Enable Proximity Alerts", CurrentValue = false, Flag = "ProximityAlertsToggle",
+    Callback = function(v)
+        Settings.ProximityAlertsEnabled = v
+        proximityGui.Enabled = v
+        if not v then
+            for _, cardData in pairs(proximityCards) do
+                if cardData.frame then cardData.frame.Visible = false end
+            end
+        end
+    end,
+})
+
+VisualsTab:CreateSlider({
+    Name = "Alert Distance", Range = {10,500}, Increment = 5, Suffix = "m", CurrentValue = 50, Flag = "ProximityDistance",
+    Callback = function(v) Settings.ProximityDistance = v end,
+})
+
+VisualsTab:CreateToggle({
+    Name = "Proximity SFX", CurrentValue = true, Flag = "ProximitySFXToggle",
+    Callback = function(v) Settings.ProximitySFXEnabled = v end,
+})
+
+-- ══════════════════════════════════════════
+-- TAB 3 — RAGE
+-- ══════════════════════════════════════════
+local RageTab = Window:CreateTab("Rage", 4483362458)
+RageTab:CreateSection("Teleport")
+
+playerDropdown = RageTab:CreateDropdown({
+    Name = "Select Target Player", Options = getPlayerNames(), CurrentOption = {}, MultipleOptions = false, Flag = "TeleportTarget",
+    Callback = function(selected)
+        local choice = type(selected) == "table" and selected[1] or selected
+        Settings.TeleportTarget = choice or nil
+    end,
+})
+
+RageTab:CreateButton({ Name = "Teleport Once", Callback = function() teleportToTarget() end })
+
+local TeleportLoopToggle = RageTab:CreateToggle({
+    Name = "Teleport Loop", CurrentValue = false, Flag = "TeleportLoopToggle",
+    Callback = function(v)
+        Settings.TeleportLoopEnabled = v
+        if v then
+            if not Settings.TeleportTarget or Settings.TeleportTarget == "" then
+                Rayfield:Notify({ Title = "Rage", Content = "Select a player first.", Duration = 2 })
+                UIToggles["TeleportLoopToggle"]:Set(false)
+                Settings.TeleportLoopEnabled = false
+                return
+            end
+            startTeleportLoop()
+        else
+            stopTeleportLoop()
+        end
+    end,
+})
+UIToggles["TeleportLoopToggle"] = TeleportLoopToggle
+
+RageTab:CreateSlider({
+    Name = "Loop Delay", Range = {1,10}, Increment = 1, Suffix = "s", CurrentValue = 2, Flag = "TeleportDelay",
+    Callback = function(v) Settings.TeleportDelay = v end,
+})
+
+-- ══════════════════════════════════════════
+-- TAB 4 — PLAYER MODS
+-- ══════════════════════════════════════════
+local PlayerModsTab = Window:CreateTab("Player Mods", 4483362458)
+
+PlayerModsTab:CreateSection("Speed Control")
+
+local SpeedToggle = PlayerModsTab:CreateToggle({
+    Name = "Enable Speed", CurrentValue = false, Flag = "SpeedEnabled",
+    Callback = function(v)
+        Settings.SpeedEnabled = v
+        if v then applySpeed(Settings.SpeedMultiplier) else resetSpeed() end
+    end,
+})
+UIToggles["SpeedToggle"] = SpeedToggle
+
+-- Speed slider capped at 1x–100x
+PlayerModsTab:CreateSlider({
+    Name = "Walk Speed Multiplier", Range = {1, 100}, Increment = 1, Suffix = "x", CurrentValue = 1, Flag = "SpeedMultiplier",
+    Callback = function(v)
+        Settings.SpeedMultiplier = v
+        if Settings.SpeedEnabled then applySpeed(v) end
+    end,
+})
+
+PlayerModsTab:CreateButton({
+    Name = "Reset Speed",
+    Callback = function()
+        Settings.SpeedMultiplier = 1
+        Settings.SpeedEnabled    = false
+        if UIToggles["SpeedToggle"] then UIToggles["SpeedToggle"]:Set(false) end
+        resetSpeed()
+        Rayfield:Notify({ Title = "Player Mods", Content = "Speed reset.", Duration = 2 })
+    end,
+})
+
+PlayerModsTab:CreateSection("Noclip")
+
+local NoclipToggle = PlayerModsTab:CreateToggle({
+    Name = "Enable Noclip", CurrentValue = false, Flag = "NoclipEnabled",
+    Callback = function(v)
+        Settings.NoclipEnabled = v
+        if not v then
+            stopNoclip()
+            startNoclip() -- restart in paused state so restore runs
+        end
+        Rayfield:Notify({ Title = "Player Mods", Content = "Noclip " .. (v and "ON" or "OFF"), Duration = 1.5 })
+    end,
+})
+UIToggles["NoclipToggle"] = NoclipToggle
+
+-- ══════════════════════════════════════════
+-- TAB 5 — KEYBINDS
+-- ══════════════════════════════════════════
+local KeybindsTab = Window:CreateTab("Keybinds", 4483362458)
+
+KeybindsTab:CreateSection("Visuals")
+
+KeybindsTab:CreateKeybind({
+    Name = "Toggle Highlights", CurrentKeybind = "F1", HoldToInteract = false, Flag = "KeyESP",
+    Callback = function()
+        Settings.ESPEnabled = not Settings.ESPEnabled
+        if UIToggles["ESPToggle"] then UIToggles["ESPToggle"]:Set(Settings.ESPEnabled) end
+        refreshAll()
+        Rayfield:Notify({ Title = "Anarchying It", Content = "Highlights " .. (Settings.ESPEnabled and "ON" or "OFF"), Duration = 1.5 })
+    end,
+})
+
+KeybindsTab:CreateKeybind({
+    Name = "Toggle Names", CurrentKeybind = "F2", HoldToInteract = false, Flag = "KeyNames",
+    Callback = function()
+        Settings.NamesEnabled = not Settings.NamesEnabled
+        if UIToggles["NamesToggle"] then UIToggles["NamesToggle"]:Set(Settings.NamesEnabled) end
+        if Settings.NamesEnabled then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then addNameBillboard(p, p.Character) end
+            end
+        else
+            for _, p in ipairs(Players:GetPlayers()) do removeNameBillboard(p) end
+        end
+        Rayfield:Notify({ Title = "Anarchying It", Content = "Names " .. (Settings.NamesEnabled and "ON" or "OFF"), Duration = 1.5 })
+    end,
+})
+
+KeybindsTab:CreateKeybind({
+    Name = "Toggle Distance", CurrentKeybind = "F3", HoldToInteract = false, Flag = "KeyDistance",
+    Callback = function()
+        Settings.DistanceEnabled = not Settings.DistanceEnabled
+        if UIToggles["DistToggle"] then UIToggles["DistToggle"]:Set(Settings.DistanceEnabled) end
+        if Settings.DistanceEnabled then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then addDistanceBillboard(p, p.Character) end
+            end
+        else
+            for _, p in ipairs(Players:GetPlayers()) do removeDistanceBillboard(p) end
+        end
+        Rayfield:Notify({ Title = "Anarchying It", Content = "Distance " .. (Settings.DistanceEnabled and "ON" or "OFF"), Duration = 1.5 })
+    end,
+})
+
+KeybindsTab:CreateSection("Rage")
+
+KeybindsTab:CreateKeybind({
+    Name = "Teleport Once", CurrentKeybind = "F4", HoldToInteract = false, Flag = "KeyTeleportOnce",
+    Callback = function() teleportToTarget() end,
+})
+
+KeybindsTab:CreateKeybind({
+    Name = "Toggle Teleport Loop", CurrentKeybind = "F5", HoldToInteract = false, Flag = "KeyTeleportLoop",
+    Callback = function()
+        if not Settings.TeleportTarget or Settings.TeleportTarget == "" then
+            Rayfield:Notify({ Title = "Rage", Content = "Select a player first.", Duration = 2 })
+            return
+        end
+        Settings.TeleportLoopEnabled = not Settings.TeleportLoopEnabled
+        if UIToggles["TeleportLoopToggle"] then UIToggles["TeleportLoopToggle"]:Set(Settings.TeleportLoopEnabled) end
+        if Settings.TeleportLoopEnabled then startTeleportLoop() else stopTeleportLoop() end
+        Rayfield:Notify({ Title = "Rage", Content = "Teleport Loop " .. (Settings.TeleportLoopEnabled and "ON" or "OFF"), Duration = 1.5 })
+    end,
+})
+
+KeybindsTab:CreateSection("Player Mods")
+
+KeybindsTab:CreateKeybind({
+    Name = "Toggle Speed", CurrentKeybind = "F6", HoldToInteract = false, Flag = "KeySpeed",
+    Callback = function()
+        Settings.SpeedEnabled = not Settings.SpeedEnabled
+        if UIToggles["SpeedToggle"] then UIToggles["SpeedToggle"]:Set(Settings.SpeedEnabled) end
+        if Settings.SpeedEnabled then applySpeed(Settings.SpeedMultiplier) else resetSpeed() end
+        Rayfield:Notify({ Title = "Player Mods", Content = "Speed " .. (Settings.SpeedEnabled and "ON" or "OFF"), Duration = 1.5 })
+    end,
+})
+
+KeybindsTab:CreateKeybind({
+    Name = "Toggle Noclip", CurrentKeybind = "F7", HoldToInteract = false, Flag = "KeyNoclip",
+    Callback = function()
+        Settings.NoclipEnabled = not Settings.NoclipEnabled
+        if UIToggles["NoclipToggle"] then UIToggles["NoclipToggle"]:Set(Settings.NoclipEnabled) end
+        if not Settings.NoclipEnabled then stopNoclip() startNoclip() end
+        Rayfield:Notify({ Title = "Player Mods", Content = "Noclip " .. (Settings.NoclipEnabled and "ON" or "OFF"), Duration = 1.5 })
+    end,
+})
+
+Rayfield:LoadConfiguration()
